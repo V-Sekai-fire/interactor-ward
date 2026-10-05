@@ -1,37 +1,22 @@
 # interactor-ward
 
-A server-authoritative networked physics service for one ward, after
-[networked physics in virtual reality](https://gafferongames.com/post/networked_physics_in_virtual_reality/)
-with the authority moved to the server. The physics is not written yet.
+A server-authoritative networked physics service for one ward, whose state is a SQLite database over a FoundationDB-backed VFS.
 
-## What is server-authoritative about it
+## What it is for
 
-Gaffer's design gives authority to whichever client last touched a cube, and every client runs
-the same deterministic simulation so the hand-off agrees. That works because there is no server
-in it. Here there is one, and it already owns the state a client would have to be trusted with:
-a ward is a SQLite database over the store's VFS, a cycle is a transaction, and no client
-opens a database. So authority does not move. What is left of the design is the part that was
-never about trust — the priority accumulator that decides which of a ward's bodies a given
-subscriber hears about this tick, which is the same problem `fanout_one` already has.
+No client opens the ward's database, so authority over a body stays on the server, and a priority accumulator chooses which bodies each subscriber hears about in a tick. `queen`, a settlement game, is the ward's tenant and plays it as database transactions. The benchmarks ask how many players one core holds under a physics engine.
 
-The sizes are already here and they agree with the shape:
+## Build and run
 
-| what | value | where |
-| --- | --- | --- |
-| entities in a ward | 1800, of which 400 are ghosts | `WARD_ENTITIES`, `WARD_HEADROOM` in `src/ward.h` |
-| entities in one subscriber's tick | 64 | `SLICE_ENTITIES` in `src/queen.c` |
-| publish rate | 20 Hz | `WARD_TICK_HZ` in `src/queen.c` |
-| entities in one interactor reply | 2621 | `WARD_REPLY_MAX` / 100, `src/interactor.h` |
+The build needs a FoundationDB client and SQLite.
 
-A ward does not fit in a slice and is not meant to: 1800 bodies at 100 bytes and 20 Hz is
-3.6 MB/s, and 64 of them is 128 kB/s, which is the budget the accumulator is spending. A ward
-does fit in one interactor reply, with 821 entities to spare, so the reliable path needs no
-chunking. Those two facts are the whole of the transport decision, and both are read from the
-source rather than copied into it.
+```sh
+cmake -B build
+cmake --build build
+```
 
-## Where the durable state is described
+`queen` prints its subcommands when run without arguments, and it needs a live cluster to start. `docker compose run --rm ci` runs the CI job against a cluster in a container.
 
-This repository is a clone of [`datasource-queen`](https://github.com/v-sekai-multiplayer-fabric/datasource-queen),
-and its README carried a copy of that repository's own documentation: the ring, the VFS, the
-`queen` tenant, CI, and state. That copy is gone. `datasource-queen` is the one place those are
-written, and its `docs/design.md` holds them.
+## Licence
+
+`LICENSE` is MIT; the source files carry Apache-2.0 SPDX headers.
